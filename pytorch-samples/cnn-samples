@@ -1,0 +1,279 @@
+"""
+CNN example with PyTorch on the MNIST dataset.
+
+Install dependencies:
+    pip install torch torchvision matplotlib
+
+This script:
+1. Downloads the MNIST dataset from the internet
+2. Builds a simple CNN
+3. Trains the model
+4. Evaluates test accuracy
+"""
+
+import torch
+import torch.nn as nn
+import torch.optim as optim
+
+from torch.utils.data import DataLoader
+from torchvision import datasets, transforms
+
+
+# ---------------------------------------------------------
+# 1. Basic settings
+# ---------------------------------------------------------
+
+BATCH_SIZE = 64
+LEARNING_RATE = 0.001
+EPOCHS = 5
+
+# Use GPU if available, otherwise use CPU
+device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
+
+print(f"Using device: {device}")
+
+
+# ---------------------------------------------------------
+# 2. Load MNIST dataset
+# ---------------------------------------------------------
+
+# MNIST images are grayscale images with size 28x28.
+# transforms.ToTensor() converts images to PyTorch tensors.
+# transforms.Normalize() normalizes pixel values.
+transform = transforms.Compose([
+    transforms.ToTensor(),
+    transforms.Normalize((0.1307,), (0.3081,))
+])
+
+train_dataset = datasets.MNIST(
+    root="./data",
+    train=True,
+    download=True,
+    transform=transform
+)
+
+test_dataset = datasets.MNIST(
+    root="./data",
+    train=False,
+    download=True,
+    transform=transform
+)
+
+train_loader = DataLoader(
+    dataset=train_dataset,
+    batch_size=BATCH_SIZE,
+    shuffle=True
+)
+
+test_loader = DataLoader(
+    dataset=test_dataset,
+    batch_size=BATCH_SIZE,
+    shuffle=False
+)
+
+
+# ---------------------------------------------------------
+# 3. Define CNN model
+# ---------------------------------------------------------
+
+class SimpleCNN(nn.Module):
+    """
+    A simple Convolutional Neural Network for MNIST.
+
+    Input shape:
+        batch_size x 1 x 28 x 28
+
+    Output shape:
+        batch_size x 10
+    """
+
+    def __init__(self):
+        super(SimpleCNN, self).__init__()
+
+        # First convolution block
+        # Input channels: 1 because MNIST is grayscale
+        # Output channels: 32 feature maps
+        self.conv1 = nn.Conv2d(
+            in_channels=1,
+            out_channels=32,
+            kernel_size=3,
+            padding=1
+        )
+
+        # Second convolution block
+        self.conv2 = nn.Conv2d(
+            in_channels=32,
+            out_channels=64,
+            kernel_size=3,
+            padding=1
+        )
+
+        # Max pooling reduces image size by half
+        self.pool = nn.MaxPool2d(kernel_size=2, stride=2)
+
+        # ReLU adds non-linearity
+        self.relu = nn.ReLU()
+
+        # Dropout helps reduce overfitting
+        self.dropout = nn.Dropout(0.25)
+
+        # After two pooling layers:
+        # 28x28 -> 14x14 -> 7x7
+        # Final feature map shape: 64 x 7 x 7
+        self.fc1 = nn.Linear(64 * 7 * 7, 128)
+        self.fc2 = nn.Linear(128, 10)
+
+    def forward(self, x):
+        # First block: conv -> relu -> pool
+        x = self.conv1(x)
+        x = self.relu(x)
+        x = self.pool(x)
+
+        # Second block: conv -> relu -> pool
+        x = self.conv2(x)
+        x = self.relu(x)
+        x = self.pool(x)
+
+        # Flatten feature maps into a vector
+        x = x.view(x.size(0), -1)
+
+        # Fully connected layers
+        x = self.fc1(x)
+        x = self.relu(x)
+        x = self.dropout(x)
+
+        x = self.fc2(x)
+
+        return x
+
+
+model = SimpleCNN().to(device)
+
+print(model)
+
+
+# ---------------------------------------------------------
+# 4. Loss function and optimizer
+# ---------------------------------------------------------
+
+# CrossEntropyLoss is commonly used for multi-class classification.
+# It combines softmax and negative log-likelihood loss internally.
+criterion = nn.CrossEntropyLoss()
+
+# Adam is a popular optimizer that usually works well as a default choice.
+optimizer = optim.Adam(model.parameters(), lr=LEARNING_RATE)
+
+
+# ---------------------------------------------------------
+# 5. Training function
+# ---------------------------------------------------------
+
+def train(model, train_loader, criterion, optimizer, device):
+    model.train()
+
+    running_loss = 0.0
+    correct = 0
+    total = 0
+
+    for images, labels in train_loader:
+        images = images.to(device)
+        labels = labels.to(device)
+
+        # Clear old gradients
+        optimizer.zero_grad()
+
+        # Forward pass
+        outputs = model(images)
+
+        # Compute loss
+        loss = criterion(outputs, labels)
+
+        # Backward pass
+        loss.backward()
+
+        # Update parameters
+        optimizer.step()
+
+        running_loss += loss.item()
+
+        # Get predicted class
+        _, predicted = torch.max(outputs, dim=1)
+
+        total += labels.size(0)
+        correct += (predicted == labels).sum().item()
+
+    avg_loss = running_loss / len(train_loader)
+    accuracy = correct / total
+
+    return avg_loss, accuracy
+
+
+# ---------------------------------------------------------
+# 6. Evaluation function
+# ---------------------------------------------------------
+
+def evaluate(model, test_loader, criterion, device):
+    model.eval()
+
+    running_loss = 0.0
+    correct = 0
+    total = 0
+
+    # No gradient calculation is needed during evaluation
+    with torch.no_grad():
+        for images, labels in test_loader:
+            images = images.to(device)
+            labels = labels.to(device)
+
+            outputs = model(images)
+            loss = criterion(outputs, labels)
+
+            running_loss += loss.item()
+
+            _, predicted = torch.max(outputs, dim=1)
+
+            total += labels.size(0)
+            correct += (predicted == labels).sum().item()
+
+    avg_loss = running_loss / len(test_loader)
+    accuracy = correct / total
+
+    return avg_loss, accuracy
+
+
+# ---------------------------------------------------------
+# 7. Train the model
+# ---------------------------------------------------------
+
+for epoch in range(EPOCHS):
+    train_loss, train_acc = train(
+        model,
+        train_loader,
+        criterion,
+        optimizer,
+        device
+    )
+
+    test_loss, test_acc = evaluate(
+        model,
+        test_loader,
+        criterion,
+        device
+    )
+
+    print(
+        f"Epoch [{epoch + 1}/{EPOCHS}] "
+        f"Train Loss: {train_loss:.4f}, "
+        f"Train Acc: {train_acc:.4f}, "
+        f"Test Loss: {test_loss:.4f}, "
+        f"Test Acc: {test_acc:.4f}"
+    )
+
+
+# ---------------------------------------------------------
+# 8. Save the trained model
+# ---------------------------------------------------------
+
+torch.save(model.state_dict(), "./models/mnist_cnn.pth")
+
+print("Model saved as models/mnist_cnn.pth")
