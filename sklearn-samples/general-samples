@@ -1,0 +1,521 @@
+"""
+Required packages:
+    pip install scikit-learn numpy pandas
+
+Optional packages for gradient boosting libraries outside scikit-learn:
+    pip install xgboost lightgbm
+"""
+
+import warnings
+warnings.filterwarnings("ignore")
+
+import numpy as np
+import pandas as pd
+
+from sklearn.datasets import (
+    load_diabetes,
+    load_iris,
+    load_breast_cancer,
+    load_digits,
+    make_blobs,
+)
+from sklearn.model_selection import train_test_split
+from sklearn.preprocessing import StandardScaler
+from sklearn.pipeline import Pipeline
+from sklearn.metrics import (
+    mean_squared_error,
+    r2_score,
+    accuracy_score,
+    classification_report,
+    adjusted_rand_score,
+)
+
+from sklearn.linear_model import LinearRegression, LogisticRegression
+from sklearn.svm import SVC
+from sklearn.tree import DecisionTreeClassifier
+from sklearn.ensemble import RandomForestClassifier, AdaBoostClassifier
+from sklearn.neighbors import KNeighborsClassifier
+from sklearn.naive_bayes import GaussianNB
+from sklearn.cluster import KMeans
+from sklearn.decomposition import PCA
+
+
+# -----------------------------------------------------------------------------
+# Helper functions
+# -----------------------------------------------------------------------------
+
+def print_regression_result(model_name, y_true, y_pred):
+    """Print common regression metrics."""
+    mse = mean_squared_error(y_true, y_pred)
+    rmse = np.sqrt(mse)
+    r2 = r2_score(y_true, y_pred)
+
+    print(f"\n{model_name}")
+    print("-" * len(model_name))
+    print(f"MSE : {mse:.4f}")
+    print(f"RMSE: {rmse:.4f}")
+    print(f"R^2 : {r2:.4f}")
+
+
+def print_classification_result(model_name, y_true, y_pred, target_names=None):
+    """Print accuracy and a classification report."""
+    acc = accuracy_score(y_true, y_pred)
+
+    print(f"\n{model_name}")
+    print("-" * len(model_name))
+    print(f"Accuracy: {acc:.4f}")
+    print(classification_report(y_true, y_pred, target_names=target_names))
+
+
+# -----------------------------------------------------------------------------
+# 1. Simple Linear Regression: one input variable, one target variable
+# -----------------------------------------------------------------------------
+
+def simple_linear_regression_example():
+    """
+    Simple linear regression uses only one feature.
+
+    Dataset: Diabetes dataset
+    Feature: BMI
+    Target: disease progression score
+    """
+    diabetes = load_diabetes()
+    X = pd.DataFrame(diabetes.data, columns=diabetes.feature_names)
+    y = diabetes.target
+
+    # Use only one variable: y = w*x + b clearly.
+    X_single = X[["bmi"]]
+
+    X_train, X_test, y_train, y_test = train_test_split(
+        X_single, y, test_size=0.2, random_state=42
+    )
+
+    model = LinearRegression()
+    model.fit(X_train, y_train)
+
+    y_pred = model.predict(X_test)
+
+    print_regression_result("Simple Linear Regression", y_test, y_pred)
+    print(f"Coefficient: {model.coef_[0]:.4f}")
+    print(f"Intercept  : {model.intercept_:.4f}")
+
+
+# -----------------------------------------------------------------------------
+# 2. Multiple Linear Regression: multiple input variables, one target variable
+# -----------------------------------------------------------------------------
+
+def multiple_linear_regression_example():
+    """
+    Multiple linear regression uses several features at the same time.
+
+    Dataset: Diabetes dataset
+    Features: all available numerical features
+    Target: disease progression score
+    """
+    diabetes = load_diabetes()
+    X = pd.DataFrame(diabetes.data, columns=diabetes.feature_names)
+    y = diabetes.target
+
+    X_train, X_test, y_train, y_test = train_test_split(
+        X, y, test_size=0.2, random_state=42
+    )
+
+    model = LinearRegression()
+    model.fit(X_train, y_train)
+
+    y_pred = model.predict(X_test)
+
+    print_regression_result("Multiple Linear Regression", y_test, y_pred)
+
+    # Show each feature's coefficient, can compare feature importance roughly.
+    coef_table = pd.DataFrame({
+        "feature": diabetes.feature_names,
+        "coefficient": model.coef_,
+    })
+    print(coef_table)
+
+
+# -----------------------------------------------------------------------------
+# 3. Logistic Regression: classification, not regression despite the name
+# -----------------------------------------------------------------------------
+
+def logistic_regression_example():
+    """
+    Logistic regression is commonly used for classification.
+
+    Dataset: Iris dataset
+    Task: classify iris flowers into 3 species
+    """
+    iris = load_iris()
+    X, y = iris.data, iris.target
+
+    X_train, X_test, y_train, y_test = train_test_split(
+        X, y, test_size=0.2, random_state=42, stratify=y
+    )
+
+    # Scaling helps many linear models converge faster and behave better.
+    model = Pipeline([
+        ("scaler", StandardScaler()),
+        ("classifier", LogisticRegression(max_iter=1000)),
+    ])
+
+    model.fit(X_train, y_train)
+    y_pred = model.predict(X_test)
+
+    print_classification_result(
+        "Logistic Regression", y_test, y_pred, target_names=iris.target_names
+    )
+
+
+# -----------------------------------------------------------------------------
+# 4. Support Vector Machine
+# -----------------------------------------------------------------------------
+
+def svm_soft_margin_example():
+    """
+    Soft-margin SVM allows some classification errors.
+
+    Smaller C means more tolerance for mistakes and a wider margin.
+    Larger C means fewer training errors but potentially overfitting.
+    """
+    iris = load_iris()
+    X, y = iris.data, iris.target
+
+    X_train, X_test, y_train, y_test = train_test_split(
+        X, y, test_size=0.2, random_state=42, stratify=y
+    )
+
+    model = Pipeline([
+        ("scaler", StandardScaler()),
+        ("classifier", SVC(kernel="linear", C=1.0)),
+    ])
+
+    model.fit(X_train, y_train)
+    y_pred = model.predict(X_test)
+
+    print_classification_result(
+        "SVM - Soft Margin", y_test, y_pred, target_names=iris.target_names
+    )
+
+# -----------------------------------------------------------------------------
+# 5. Decision Tree
+# -----------------------------------------------------------------------------
+
+def decision_tree_example():
+    """
+    Decision trees split data using feature thresholds.
+    They are easy to explain but can overfit if the tree is too deep.
+    """
+    iris = load_iris()
+    X, y = iris.data, iris.target
+
+    X_train, X_test, y_train, y_test = train_test_split(
+        X, y, test_size=0.2, random_state=42, stratify=y
+    )
+
+    model = DecisionTreeClassifier(max_depth=3, random_state=42)
+    model.fit(X_train, y_train)
+    y_pred = model.predict(X_test)
+
+    print_classification_result(
+        "Decision Tree", y_test, y_pred, target_names=iris.target_names
+    )
+    print(f"Tree depth: {model.get_depth()}")
+    print(f"Number of leaves: {model.get_n_leaves()}")
+
+
+# -----------------------------------------------------------------------------
+# 6. Random Forest
+# -----------------------------------------------------------------------------
+
+def random_forest_example():
+    """
+    Random forest combines many decision trees.
+    Each tree sees a random subset of data/features, which helps reduce overfitting.
+    """
+    cancer = load_breast_cancer()
+    X, y = cancer.data, cancer.target
+
+    X_train, X_test, y_train, y_test = train_test_split(
+        X, y, test_size=0.2, random_state=42, stratify=y
+    )
+
+    model = RandomForestClassifier(
+        n_estimators=100,
+        max_depth=5,
+        random_state=42,
+    )
+    model.fit(X_train, y_train)
+    y_pred = model.predict(X_test)
+
+    print_classification_result(
+        "Random Forest", y_test, y_pred, target_names=cancer.target_names
+    )
+
+    # Show the top 10 most important features.
+    importance_table = pd.DataFrame({
+        "feature": cancer.feature_names,
+        "importance": model.feature_importances_,
+    }).sort_values("importance", ascending=False)
+
+    print("Top 10 important features:")
+    print(importance_table.head(10))
+
+
+# -----------------------------------------------------------------------------
+# 7. XGBoost: optional external library
+# -----------------------------------------------------------------------------
+
+def xgboost_example():
+    """
+    XGBoost is not part of scikit-learn, but it provides a scikit-learn-like API.
+
+    Install it first if needed:
+        pip install xgboost
+    """
+    try:
+        from xgboost import XGBClassifier
+    except ImportError:
+        print("\nXGBoost")
+        print("-------")
+        print("xgboost is not installed. Run: pip install xgboost")
+        return
+
+    cancer = load_breast_cancer()
+    X, y = cancer.data, cancer.target
+
+    X_train, X_test, y_train, y_test = train_test_split(
+        X, y, test_size=0.2, random_state=42, stratify=y
+    )
+
+    model = XGBClassifier(
+        n_estimators=100,
+        learning_rate=0.1,
+        max_depth=3,
+        subsample=0.9,
+        colsample_bytree=0.9,
+        eval_metric="logloss",
+        random_state=42,
+    )
+
+    model.fit(X_train, y_train)
+    y_pred = model.predict(X_test)
+
+    print_classification_result(
+        "XGBoost", y_test, y_pred, target_names=cancer.target_names
+    )
+
+
+# -----------------------------------------------------------------------------
+# 8. AdaBoost
+# -----------------------------------------------------------------------------
+
+def adaboost_example():
+    """
+    AdaBoost trains weak learners sequentially.
+    Later learners pay more attention to samples that earlier learners misclassified.
+    """
+    cancer = load_breast_cancer()
+    X, y = cancer.data, cancer.target
+
+    X_train, X_test, y_train, y_test = train_test_split(
+        X, y, test_size=0.2, random_state=42, stratify=y
+    )
+
+    model = AdaBoostClassifier(
+        n_estimators=100,
+        learning_rate=0.5,
+        random_state=42,
+    )
+
+    model.fit(X_train, y_train)
+    y_pred = model.predict(X_test)
+
+    print_classification_result(
+        "AdaBoost", y_test, y_pred, target_names=cancer.target_names
+    )
+
+
+# -----------------------------------------------------------------------------
+# 9. LightGBM: optional external library
+# -----------------------------------------------------------------------------
+
+def lightgbm_example():
+    """
+    LightGBM is not part of scikit-learn, but it provides a scikit-learn-like API.
+
+    Install it first if needed:
+        pip install lightgbm
+    """
+    try:
+        from lightgbm import LGBMClassifier
+    except ImportError:
+        print("\nLightGBM")
+        print("--------")
+        print("lightgbm is not installed. Run: pip install lightgbm")
+        return
+
+    cancer = load_breast_cancer()
+    X, y = cancer.data, cancer.target
+
+    X_train, X_test, y_train, y_test = train_test_split(
+        X, y, test_size=0.2, random_state=42, stratify=y
+    )
+
+    model = LGBMClassifier(
+        n_estimators=100,
+        learning_rate=0.1,
+        max_depth=3,
+        random_state=42,
+        verbose=-1,
+    )
+
+    model.fit(X_train, y_train)
+    y_pred = model.predict(X_test)
+
+    print_classification_result(
+        "LightGBM", y_test, y_pred, target_names=cancer.target_names
+    )
+
+
+# -----------------------------------------------------------------------------
+# 10. K-Nearest Neighbors
+# -----------------------------------------------------------------------------
+
+def knn_example():
+    """
+    KNN predicts a sample's label by looking at the labels of nearby samples.
+    Feature scaling is important because KNN uses distance.
+    """
+    iris = load_iris()
+    X, y = iris.data, iris.target
+
+    X_train, X_test, y_train, y_test = train_test_split(
+        X, y, test_size=0.2, random_state=42, stratify=y
+    )
+
+    model = Pipeline([
+        ("scaler", StandardScaler()),
+        ("classifier", KNeighborsClassifier(n_neighbors=5)),
+    ])
+
+    model.fit(X_train, y_train)
+    y_pred = model.predict(X_test)
+
+    print_classification_result(
+        "K-Nearest Neighbors", y_test, y_pred, target_names=iris.target_names
+    )
+
+
+# -----------------------------------------------------------------------------
+# 11. Naive Bayes
+# -----------------------------------------------------------------------------
+
+def naive_bayes_example():
+    """
+    Gaussian Naive Bayes assumes each feature follows a Gaussian distribution.
+    It also assumes features are conditionally independent given the class.
+    """
+    iris = load_iris()
+    X, y = iris.data, iris.target
+
+    X_train, X_test, y_train, y_test = train_test_split(
+        X, y, test_size=0.2, random_state=42, stratify=y
+    )
+
+    model = GaussianNB()
+    model.fit(X_train, y_train)
+    y_pred = model.predict(X_test)
+
+    print_classification_result(
+        "Naive Bayes", y_test, y_pred, target_names=iris.target_names
+    )
+
+
+# -----------------------------------------------------------------------------
+# 12. K-Means Clustering
+# -----------------------------------------------------------------------------
+
+def kmeans_example():
+    """
+    K-Means is an unsupervised learning algorithm.
+    It groups samples into K clusters without using true labels during training.
+
+    Here we use Iris data and compare clusters with true labels only.
+    In real unsupervised learning, true labels are usually unavailable.
+    """
+    iris = load_iris()
+    X, y_true = iris.data, iris.target
+
+    model = Pipeline([
+        ("scaler", StandardScaler()),
+        ("clusterer", KMeans(n_clusters=3, random_state=42, n_init=10)),
+    ])
+
+    y_cluster = model.fit_predict(X)
+
+    # Accuracy is not ideal for clustering because cluster IDs are arbitrary.
+    # Adjusted Rand Index is better for comparing clustering result with known labels.
+    ari = adjusted_rand_score(y_true, y_cluster)
+
+    print("\nK-Means Clustering")
+    print("------------------")
+    print(f"Adjusted Rand Index: {ari:.4f}")
+    print("First 10 cluster labels:", y_cluster[:10])
+
+
+# -----------------------------------------------------------------------------
+# 13. Principal Component Analysis, PCA
+# -----------------------------------------------------------------------------
+
+def pca_example():
+    """
+    PCA is an unsupervised dimensionality reduction method.
+    It creates new features called principal components.
+
+    Dataset: Digits dataset
+    Original dimension: 64 pixels
+    Reduced dimension: 2 principal components
+    """
+    digits = load_digits()
+    X, y = digits.data, digits.target
+
+    model = Pipeline([
+        ("scaler", StandardScaler()),
+        ("pca", PCA(n_components=2, random_state=42)),
+    ])
+
+    X_pca = model.fit_transform(X)
+    pca = model.named_steps["pca"]
+
+    print("\nPrincipal Component Analysis, PCA")
+    print("---------------------------------")
+    print(f"Original shape: {X.shape}")
+    print(f"Reduced shape : {X_pca.shape}")
+    print("Explained variance ratio:", pca.explained_variance_ratio_)
+    print("First 5 transformed samples:")
+    print(pd.DataFrame(X_pca[:5], columns=["PC1", "PC2"]))
+
+
+# -----------------------------------------------------------------------------
+# Main function: run all examples
+# -----------------------------------------------------------------------------
+
+def main():
+    simple_linear_regression_example()
+    multiple_linear_regression_example()
+    logistic_regression_example()
+    svm_soft_margin_example()
+    decision_tree_example()
+    random_forest_example()
+    xgboost_example()
+    adaboost_example()
+    lightgbm_example()
+    knn_example()
+    naive_bayes_example()
+    kmeans_example()
+    pca_example()
+
+
+if __name__ == "__main__":
+    main()
